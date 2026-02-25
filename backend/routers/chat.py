@@ -21,10 +21,13 @@ What is session_id?
   Different users have different session IDs → separate histories.
 """
 
+import json
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.services.rag_chain import ask
+from backend.services.rag_chain import ask, stream_ask
 from backend.services.firestore_service import save_message
 
 router = APIRouter()
@@ -94,3 +97,55 @@ async def chat(request: ChatRequest):
         sources=[SourceChunk(**s) for s in result["sources"]],
         session_id=request.session_id,
     )
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Streaming version of /chat — tokens arrive one by one instead of all at once.
+
+    Uses FastAPI's StreamingResponse with text/event-stream content type.
+    The response body is a sequence of plain text chunks (not SSE format —
+    just raw text so the frontend can read it with iter_content).
+
+    Protocol:
+      - Text chunks:   plain strings like "Machine", " learning", " is", "..."
+      - Final chunk:   starts with "__SOURCES__" followed by JSON array
+
+    Why plain text instead of SSE?
+      Server-Sent Events (SSE) add overhead (data: prefix, double newlines).
+      Since we only need one-way streaming and the frontend uses requests.get()
+      with stream=True, raw chunked transfer is simpler and lighter.
+    """
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    if not request.session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id cannot be empty.")
+
+    # Save user message to Firestore before streaming starts
+    save_message(
+        session_id=request.session_id,
+        role="user",
+        content=request.message,
+    )
+
+    # Collect the full answer while streaming so we can save it to Firestore
+    # We need the complete text for history — Firestore doesn't support partial writes.
+    full_answer_parts = []
+
+    def generate():
+        for token in stream_ask(request.message):
+            if token.startswith("__SOURCES__"):
+                # This is the final sources marker — save the full answer now
+                full_answer = "".join(full_answer_parts)
+                save_message(
+                    session_id=request.session_id,
+                    role="assistant",
+                    content=full_answer,
+                )
+                yield token
+            else:
+                full_answer_parts.append(token)
+                yield token
+
+    return StreamingResponse(generate(), media_type="text/plain")

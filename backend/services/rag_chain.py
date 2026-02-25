@@ -22,6 +22,7 @@ Why this order matters:
 """
 
 import os
+import json
 from dotenv import load_dotenv
 from google import genai
 
@@ -158,3 +159,62 @@ def ask(question: str, n_results: int = TOP_K) -> dict:
         "sources": retrieved_chunks,
         "question": question,
     }
+
+
+def stream_ask(question: str, n_results: int = TOP_K):
+    """
+    Streaming version of ask() — a generator that yields text tokens one by one
+    as Gemini produces them, instead of waiting for the full response.
+
+    Why streaming?
+      Without streaming: user waits 3-5 seconds staring at a spinner.
+      With streaming:    text appears word by word immediately — feels much faster.
+
+    Protocol:
+      This generator yields two types of chunks:
+        1. Text tokens  — plain strings like "Machine", " learning", " is", "..."
+        2. Sources JSON — one final chunk starting with "__SOURCES__" followed by
+                          a JSON list of the retrieved chunks used as context.
+
+      The frontend reads text tokens and displays them progressively, then
+      parses the final __SOURCES__ chunk to show which document parts were used.
+
+    Args:
+        question:  the user's question
+        n_results: number of document chunks to retrieve (default 3)
+
+    Yields:
+        str: text tokens from Gemini, then a final __SOURCES__ JSON chunk
+    """
+    # --- Step 1 & 2: Embed + retrieve (fast, not streamed) ---
+    query_vector = get_single_embedding(question)
+    retrieved_chunks = search(query_vector, n_results=n_results)
+
+    if not retrieved_chunks:
+        yield "No documents have been uploaded yet. Please upload a document first."
+        yield f"__SOURCES__{json.dumps([])}"
+        return
+
+    # --- Step 3: Build prompt ---
+    prompt = build_prompt(question, retrieved_chunks)
+
+    # --- Step 4: Stream from Gemini token by token ---
+    # generate_content_stream() returns an iterator of partial response chunks.
+    # Each chunk.text contains a small piece of the answer (a few words).
+    # We yield each piece immediately so the frontend can display it.
+    client = genai.Client(
+        vertexai=True,
+        project=PROJECT_ID,
+        location=LOCATION,
+    )
+    for chunk in client.models.generate_content_stream(
+        model=LLM_MODEL,
+        contents=prompt,
+    ):
+        if chunk.text:
+            yield chunk.text
+
+    # --- Step 5: Send sources as final chunk ---
+    # After all text is streamed, send sources so the frontend can display them.
+    # The __SOURCES__ marker tells the frontend to stop reading text and parse JSON.
+    yield f"__SOURCES__{json.dumps(retrieved_chunks)}"
