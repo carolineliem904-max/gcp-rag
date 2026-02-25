@@ -3,11 +3,18 @@ Phase 1 Verification Script
 ============================
 Tests that your local machine can successfully connect to Vertex AI.
 
+Uses the NEW Google Gen AI SDK (google-genai package), which replaced the
+deprecated vertexai.language_models and vertexai.generative_models classes.
+
 What this script does:
-  1. Loads your GCP credentials from .env
-  2. Initializes the Vertex AI SDK
+  1. Loads your GCP config from .env
+  2. Creates a Gen AI client connected to Vertex AI
   3. Generates a text embedding (vector) using text-embedding-004
-  4. Calls Gemini 1.5 Flash for text generation
+  4. Calls Gemini 2.0 Flash for text generation
+
+Authentication: Application Default Credentials (ADC)
+  Run once in terminal: gcloud auth application-default login
+  Credentials stored at: ~/.config/gcloud/application_default_credentials.json
 
 Run this with:
   python scripts/test_vertex_ai.py
@@ -47,73 +54,77 @@ print()
 
 
 # -------------------------------------------------------------------
-# Test 1: Initialize Vertex AI
-# vertexai.init() tells the SDK which GCP project and region to use.
-# Authentication comes from GOOGLE_APPLICATION_CREDENTIALS in .env,
-# which points to your downloaded service-account-key.json file.
+# Test 1: Create Gen AI Client connected to Vertex AI
+#
+# The new google-genai SDK uses a single Client object.
+# Setting vertexai=True tells it to use Vertex AI (your GCP project)
+# instead of Google AI Studio (which requires a different API key).
+#
+# Authentication is handled automatically via ADC — no key file needed.
 # -------------------------------------------------------------------
-print("=== Test 1: Initialize Vertex AI ===")
+print("=== Test 1: Initialize Vertex AI Client ===")
 try:
-    import vertexai
-    vertexai.init(project=project_id, location=location)
-    print("✓ Vertex AI initialized successfully\n")
+    from google import genai
+
+    # Create client — vertexai=True routes all calls through your GCP project
+    client = genai.Client(
+        vertexai=True,
+        project=project_id,
+        location=location,
+    )
+    print("✓ Vertex AI client created successfully\n")
 except Exception as e:
-    print(f"✗ Failed to initialize Vertex AI: {e}")
-    print("  Check that GOOGLE_APPLICATION_CREDENTIALS points to a valid JSON key file.")
+    print(f"✗ Failed to create Vertex AI client: {e}")
+    print("  Make sure you ran: gcloud auth application-default login")
     sys.exit(1)
 
 
 # -------------------------------------------------------------------
 # Test 2: Generate an embedding
+#
 # Embeddings convert text into a list of numbers (a vector).
-# Similar texts produce similar vectors — this is how RAG retrieval works.
+# Similar texts produce similar vectors — this is the core of RAG retrieval.
 # text-embedding-004 produces 768-dimensional vectors.
 # -------------------------------------------------------------------
 print("=== Test 2: Generate Embeddings ===")
 try:
-    from vertexai.language_models import TextEmbeddingModel
-
-    # Load the embedding model
-    model = TextEmbeddingModel.from_pretrained(embedding_model)
-
-    # Generate an embedding for a test sentence
     test_text = "This is a test sentence to verify embeddings work."
-    embeddings = model.get_embeddings([test_text])
 
-    # embeddings[0].values is the list of numbers (the vector)
-    vector = embeddings[0].values
+    # embed_content sends text to the Vertex AI Embeddings API
+    result = client.models.embed_content(
+        model=embedding_model,
+        contents=test_text,
+    )
+
+    # result.embeddings is a list; [0].values is the actual float vector
+    vector = result.embeddings[0].values
     print(f"✓ Embedding generated successfully")
     print(f"  Vector dimensions: {len(vector)}")
     print(f"  First 5 values:    {[round(v, 4) for v in vector[:5]]}\n")
 except Exception as e:
     print(f"✗ Failed to generate embedding: {e}")
-    print("  Check that roles/aiplatform.user is granted to your service account.")
+    print("  Check that roles/aiplatform.user is granted and the API is enabled.")
     sys.exit(1)
 
 
 # -------------------------------------------------------------------
 # Test 3: Call Gemini for text generation
-# GenerativeModel wraps the Gemini API on Vertex AI.
-# generate_content() sends a prompt and returns the model's response.
-# gemini-1.5-flash is the fastest and cheapest Gemini model.
+#
+# generate_content sends a prompt to Gemini and returns the response.
+# gemini-2.0-flash is the latest fast + cheap Gemini model on Vertex AI.
 # -------------------------------------------------------------------
 print("=== Test 3: Call Gemini LLM ===")
 try:
-    from vertexai.generative_models import GenerativeModel
-
-    # Load the Gemini model
-    gemini = GenerativeModel(llm_model)
-
-    # Send a simple test prompt
-    response = gemini.generate_content(
-        "Say hello and confirm that you are responding correctly from Vertex AI."
+    response = client.models.generate_content(
+        model=llm_model,
+        contents="Say hello and confirm you are responding correctly from Vertex AI.",
     )
 
     print(f"✓ Gemini responded successfully")
     print(f"  Response: {response.text.strip()}\n")
 except Exception as e:
     print(f"✗ Failed to call Gemini: {e}")
-    print("  Check that Vertex AI API is enabled and the model name is correct.")
+    print("  Check that the model name in .env is correct and the API is enabled.")
     sys.exit(1)
 
 

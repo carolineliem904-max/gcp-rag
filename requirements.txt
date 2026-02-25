@@ -4,7 +4,8 @@
 # ============================================================
 
 # --- GCP SDKs ---
-google-cloud-aiplatform>=1.38.0      # Vertex AI: embeddings + Gemini LLM
+google-genai>=1.0.0                  # NEW unified Google Gen AI SDK (replaces old vertexai classes)
+google-cloud-aiplatform>=1.38.0      # Vertex AI platform SDK (still needed for some features)
 google-cloud-storage>=2.13.0         # Cloud Storage: document uploads
 google-cloud-firestore>=2.13.0       # Firestore: chat history
 google-auth>=2.25.0                  # GCP authentication

@@ -1,0 +1,88 @@
+Introduction to Machine Learning
+
+Machine learning is a branch of artificial intelligence that enables computers to learn from data
+without being explicitly programmed. Instead of writing rules by hand, we give the machine
+examples and let it figure out the patterns on its own.
+
+There are three main types of machine learning:
+
+1. Supervised Learning
+In supervised learning, the model is trained on labeled data — meaning each example has an
+input and a correct output. The model learns to map inputs to outputs. Examples include:
+- Email spam detection (input: email text, output: spam or not spam)
+- House price prediction (input: features like size and location, output: price)
+- Image classification (input: image pixels, output: label like "cat" or "dog")
+
+2. Unsupervised Learning
+In unsupervised learning, the model finds patterns in data without any labels. It groups
+similar data points together or reduces complexity. Examples include:
+- Customer segmentation (grouping customers by purchasing behavior)
+- Anomaly detection (finding unusual patterns in network traffic)
+- Dimensionality reduction (compressing data while keeping its structure)
+
+3. Reinforcement Learning
+In reinforcement learning, an agent learns by interacting with an environment and receiving
+rewards or penalties. It tries to maximize its total reward over time. Examples include:
+- Game playing (AlphaGo, chess engines)
+- Robot navigation
+- Recommendation systems
+
+Neural Networks and Deep Learning
+
+A neural network is a model inspired by the human brain. It consists of layers of connected
+"neurons" that transform inputs into outputs. Deep learning refers to neural networks with
+many layers — the word "deep" refers to the depth of the network.
+
+Deep learning has achieved remarkable results in:
+- Image recognition (identifying objects in photos)
+- Natural language processing (understanding and generating text)
+- Speech recognition (converting spoken words to text)
+- Drug discovery (predicting molecular properties)
+
+The training process involves:
+1. Forward pass: input flows through the network to produce a prediction
+2. Loss calculation: how wrong was the prediction?
+3. Backpropagation: adjust weights to reduce the error
+4. Repeat until the model performs well
+
+Large Language Models (LLMs)
+
+Large Language Models are a type of deep learning model trained on massive amounts of text.
+They learn to predict the next word in a sequence, which teaches them grammar, facts, reasoning,
+and even some common sense.
+
+Examples of LLMs include:
+- GPT-4 (OpenAI)
+- Gemini (Google DeepMind)
+- Claude (Anthropic)
+- Llama (Meta)
+
+LLMs can be used for:
+- Text generation (writing articles, code, emails)
+- Question answering (answering questions based on documents)
+- Summarization (condensing long documents into key points)
+- Translation (converting text between languages)
+- Code generation (writing and debugging code)
+
+Retrieval-Augmented Generation (RAG)
+
+RAG is a technique that combines LLMs with a retrieval system. Instead of relying only on
+what the model learned during training, RAG lets the model access external documents at
+query time.
+
+How RAG works:
+1. Documents are split into chunks and converted to embeddings (vectors)
+2. Embeddings are stored in a vector database
+3. When a user asks a question, the question is also converted to an embedding
+4. The vector database finds the most similar document chunks
+5. Those chunks are sent to the LLM as context
+6. The LLM generates an answer based on the retrieved context
+
+Benefits of RAG:
+- Up-to-date information (not limited to training data)
+- Grounded answers (based on specific documents)
+- Reduced hallucination (less likely to make things up)
+- Privacy (documents stay in your own infrastructure)
+
+This is exactly what we are building in this project — a RAG chatbot that answers questions
+about documents you upload, powered by Gemini on Vertex AI.
