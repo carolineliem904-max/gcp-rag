@@ -1,0 +1,31 @@
+# ============================================================
+# GCP RAG Chatbot — Dependencies
+# All phases included upfront so you install once.
+# ============================================================
+
+# --- GCP SDKs ---
+google-cloud-aiplatform>=1.38.0      # Vertex AI: embeddings + Gemini LLM
+google-cloud-storage>=2.13.0         # Cloud Storage: document uploads
+google-cloud-firestore>=2.13.0       # Firestore: chat history
+google-auth>=2.25.0                  # GCP authentication
+
+# --- Environment management ---
+python-dotenv>=1.0.0                 # Load variables from .env file
+
+# --- PDF processing (Phase 2) ---
+pypdf2>=3.0.0                        # Basic PDF text extraction
+pdfplumber>=0.10.0                   # Better PDF extraction (tables, layout)
+
+# --- Vector store (Phase 2) ---
+chromadb>=0.4.22                     # Local vector database
+
+# --- Web framework (Phase 4) ---
+fastapi>=0.108.0                     # API server
+uvicorn[standard]>=0.25.0           # ASGI server to run FastAPI
+python-multipart>=0.0.6              # Required for FastAPI file uploads
+
+# --- Frontend (Phase 5) ---
+streamlit>=1.30.0                    # Chat UI
+
+# --- Utilities ---
+requests>=2.31.0                     # HTTP requests
