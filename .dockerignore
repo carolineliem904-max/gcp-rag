@@ -1,0 +1,42 @@
+# ── .dockerignore ─────────────────────────────────────────────────────────────
+#
+# Tells Docker which files to EXCLUDE when building images.
+# Works exactly like .gitignore but for Docker builds.
+#
+# Why it matters:
+#   When you run "docker build", Docker sends your entire project folder to the
+#   Docker engine (called the "build context"). Without .dockerignore, it would
+#   send .venv (hundreds of MB), chroma_db, __pycache__, etc. — making builds
+#   slow and images bloated.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Virtual environment — container installs its own via pip
+.venv/
+venv/
+
+# Python cache — not needed in container
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ChromaDB local data — container uses a Docker volume instead
+chroma_db/
+
+# GCP credentials — NEVER bake secrets into an image
+.env
+service-account-key.json
+*.json.key
+
+# Git history — not needed in container
+.git/
+.gitignore
+
+# Local dev artifacts
+uploads/
+*.log
+.DS_Store
+
+# Scripts are only for local verification, not needed at runtime
+scripts/
+sample_docs/

@@ -24,14 +24,17 @@ load_dotenv()
 
 # Read bucket name from .env
 BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 
 
 def get_storage_client() -> storage.Client:
     """
     Create and return a GCS client.
     Authentication is handled automatically via Application Default Credentials (ADC).
+    Project is passed explicitly because inside a Docker container there is
+    no active gcloud config to infer it from automatically.
     """
-    return storage.Client()
+    return storage.Client(project=PROJECT_ID)
 
 
 def upload_file(local_file_path: str, destination_blob_name: str) -> str:

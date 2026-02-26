@@ -34,14 +34,17 @@ from google.cloud import firestore
 load_dotenv()
 
 COLLECTION_NAME = os.getenv("FIRESTORE_COLLECTION", "chat_history")
+PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 
 
 def get_db() -> firestore.Client:
     """
     Create and return a Firestore client.
     Authentication via Application Default Credentials (ADC).
+    Project is passed explicitly because inside a Docker container there is
+    no active gcloud config to infer it from automatically.
     """
-    return firestore.Client()
+    return firestore.Client(project=PROJECT_ID)
 
 
 def save_message(session_id: str, role: str, content: str) -> None:

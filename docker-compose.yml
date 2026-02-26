@@ -1,0 +1,69 @@
+# ── docker-compose.yml ───────────────────────────────────────────────────────
+#
+# Runs BOTH containers together with one command: docker compose up
+#
+# Key concept — service discovery:
+#   Inside Docker Compose, containers find each other by SERVICE NAME, not
+#   localhost. So the frontend calls http://backend:8000, not localhost:8000.
+#   That's why we override BACKEND_URL for the frontend service below.
+#
+# Key concept — ADC credentials:
+#   Your local "gcloud auth application-default login" credentials live at
+#   ~/.config/gcloud/application_default_credentials.json
+#   We mount that directory read-only into the backend container so it can
+#   authenticate to Vertex AI, Firestore, and Cloud Storage — same as locally.
+#   In Phase 7 (Cloud Run), this mount is NOT needed — Cloud Run has built-in
+#   identity via the service account attached to the Cloud Run service.
+# ────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Backend: FastAPI ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .                      # build context = project root
+      dockerfile: backend/Dockerfile  # which Dockerfile to use
+    ports:
+      - "8000:8000"                   # host_port:container_port
+    env_file:
+      - .env                          # loads all variables from your .env file
+    volumes:
+      # ChromaDB persistence: store vector data on your laptop, not inside
+      # the container. If the container restarts, your embeddings survive.
+      - chroma_data:/app/chroma_db
+
+      # ADC credentials: mount your local gcloud config read-only into the
+      # container so the google-auth library can find the credentials file.
+      - ~/.config/gcloud:/root/.config/gcloud:ro
+    healthcheck:
+      # FastAPI exposes GET /health — poll it until the server is ready.
+      # Uses Python (already installed) instead of curl (not in slim image).
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s   # check every 10 seconds
+      timeout: 5s     # fail if no response in 5 seconds
+      retries: 5      # mark unhealthy after 5 consecutive failures
+      start_period: 15s  # give uvicorn time to start before first check
+
+  # ── Frontend: Streamlit ─────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      # Override .env's BACKEND_URL=http://localhost:8000
+      # Inside Docker, "localhost" means the frontend container itself.
+      # "backend" resolves to the backend container via Docker's DNS.
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy   # wait for backend /health to pass first
+
+# ── Named volumes ──────────────────────────────────────────────────────────────
+# "chroma_data" is a Docker-managed volume that persists on your laptop.
+# It survives container restarts and rebuilds.
+volumes:
+  chroma_data:
