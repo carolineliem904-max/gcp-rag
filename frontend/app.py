@@ -42,18 +42,18 @@ st.markdown("""
 <style>
     /* ── Page background ── */
     .stApp {
-        background-color: #0f1117;
+        background-color: #ffffff;
     }
 
     /* ── Sidebar ── */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a1d2e 0%, #0f1117 100%);
-        border-right: 1px solid #2d2f3e;
+        background: #f8f9fb;
+        border-right: 1px solid #e5e7eb;
     }
 
     /* ── App header banner ── */
     .app-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
         padding: 1.5rem 2rem;
         border-radius: 12px;
         margin-bottom: 1.5rem;
@@ -67,51 +67,58 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
     .app-header p {
-        color: rgba(255,255,255,0.8);
+        color: rgba(255,255,255,0.85);
         margin: 0.3rem 0 0 0;
         font-size: 0.9rem;
     }
 
     /* ── Chat message bubbles ── */
     .user-bubble {
-        background: linear-gradient(135deg, #667eea, #764ba2);
+        background: linear-gradient(135deg, #e8703a, #c95a28);
         color: white;
-        padding: 0.9rem 1.2rem;
+        padding: 0.75rem 1.1rem;
         border-radius: 18px 18px 4px 18px;
-        margin: 0.5rem 0;
-        max-width: 80%;
-        margin-left: auto;
-        box-shadow: 0 2px 8px rgba(102,126,234,0.3);
+        margin: 0.4rem 0;
+        display: inline-block;
+        max-width: 60%;
+        float: right;
+        clear: both;
+        box-shadow: 0 2px 6px rgba(232,112,58,0.3);
         line-height: 1.5;
     }
     .assistant-bubble {
-        background: #1e2130;
-        color: #e0e0e0;
-        padding: 0.9rem 1.2rem;
+        background: #f3f4f6;
+        color: #111827;
+        padding: 0.75rem 1.1rem;
         border-radius: 18px 18px 18px 4px;
-        margin: 0.5rem 0;
-        max-width: 80%;
-        border: 1px solid #2d2f3e;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        margin: 0.4rem 0;
+        display: inline-block;
+        max-width: 60%;
+        float: left;
+        clear: both;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
         line-height: 1.5;
     }
+    /* clearfix so bubbles don't overlap the next element */
+    .chat-row { overflow: hidden; margin: 0.25rem 0; }
 
     /* ── Source card ── */
     .source-card {
-        background: #12141f;
-        border: 1px solid #2d2f3e;
-        border-left: 3px solid #667eea;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-left: 3px solid #4f6ef7;
         border-radius: 8px;
         padding: 0.7rem 1rem;
         margin: 0.3rem 0;
         font-size: 0.82rem;
-        color: #9ca3af;
+        color: #6b7280;
     }
     .source-badge {
         display: inline-block;
-        background: #667eea22;
-        color: #667eea;
-        border: 1px solid #667eea44;
+        background: #eff2fe;
+        color: #4f6ef7;
+        border: 1px solid #c7d2fe;
         padding: 0.15rem 0.5rem;
         border-radius: 20px;
         font-size: 0.75rem;
@@ -121,18 +128,18 @@ st.markdown("""
 
     /* ── Status pills ── */
     .status-ok {
-        background: #065f4622;
-        color: #34d399;
-        border: 1px solid #34d39944;
+        background: #f0fdf4;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
         padding: 0.2rem 0.7rem;
         border-radius: 20px;
         font-size: 0.78rem;
         font-weight: 600;
     }
     .status-error {
-        background: #7f1d1d22;
-        color: #f87171;
-        border: 1px solid #f8717144;
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
         padding: 0.2rem 0.7rem;
         border-radius: 20px;
         font-size: 0.78rem;
@@ -140,7 +147,7 @@ st.markdown("""
 
     /* ── Sidebar section labels ── */
     .sidebar-label {
-        color: #6b7280;
+        color: #9ca3af;
         font-size: 0.72rem;
         font-weight: 700;
         letter-spacing: 0.1em;
@@ -150,25 +157,25 @@ st.markdown("""
 
     /* ── Session info box ── */
     .session-box {
-        background: #1e2130;
-        border: 1px solid #2d2f3e;
+        background: #f8f9fb;
+        border: 1px solid #e5e7eb;
         border-radius: 8px;
         padding: 0.7rem 1rem;
         font-size: 0.82rem;
-        color: #9ca3af;
+        color: #6b7280;
     }
     .session-box span {
-        color: #667eea;
+        color: #4f6ef7;
         font-family: monospace;
         font-size: 0.78rem;
     }
 
     /* ── Streaming cursor ── */
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-    .cursor { animation: blink 0.7s infinite; color: #667eea; }
+    .cursor { animation: blink 0.7s infinite; color: #4f6ef7; }
 
     /* ── Divider ── */
-    hr { border-color: #2d2f3e; }
+    hr { border-color: #e5e7eb; }
 
     /* ── Streamlit overrides ── */
     .stButton > button {
@@ -176,8 +183,8 @@ st.markdown("""
         font-weight: 600;
     }
     [data-testid="stFileUploader"] {
-        background: #1e2130;
-        border: 1px dashed #2d2f3e;
+        background: #f8f9fb;
+        border: 1px dashed #d1d5db;
         border-radius: 10px;
     }
 </style>
@@ -412,12 +419,12 @@ else:
     for msg in st.session_state.messages:
         if msg["role"] == "user":
             st.markdown(
-                f'<div class="user-bubble">👤 {msg["content"]}</div>',
+                f'<div class="chat-row"><div class="user-bubble">👤 {msg["content"]}</div></div>',
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
-                f'<div class="assistant-bubble">🤖 {msg["content"]}</div>',
+                f'<div class="chat-row"><div class="assistant-bubble">🤖 {msg["content"]}</div></div>',
                 unsafe_allow_html=True,
             )
 
@@ -447,7 +454,7 @@ if st.session_state.pending_question:
     stream_container = st.empty()
     # Show immediately — covers the embedding + TTFT delay before first token
     stream_container.markdown(
-        '<div class="assistant-bubble">🤖 <em style="color:#6b7280">Thinking...</em><span class="cursor">▌</span></div>',
+        '<div class="chat-row"><div class="assistant-bubble">🤖 <em style="color:#9ca3af">Thinking...</em><span class="cursor">▌</span></div></div>',
         unsafe_allow_html=True,
     )
     accumulated = ""
@@ -459,7 +466,7 @@ if st.session_state.pending_question:
                 accumulated += payload
                 # Re-render the bubble with a blinking cursor while streaming
                 stream_container.markdown(
-                    f'<div class="assistant-bubble">🤖 {accumulated}<span class="cursor">▌</span></div>',
+                    f'<div class="chat-row"><div class="assistant-bubble">🤖 {accumulated}<span class="cursor">▌</span></div></div>',
                     unsafe_allow_html=True,
                 )
             elif event_type == "sources":
@@ -472,7 +479,7 @@ if st.session_state.pending_question:
 
         # Replace the streaming bubble with the final clean version (no cursor)
         stream_container.markdown(
-            f'<div class="assistant-bubble">🤖 {accumulated}</div>',
+            f'<div class="chat-row"><div class="assistant-bubble">🤖 {accumulated}</div></div>',
             unsafe_allow_html=True,
         )
 
