@@ -29,12 +29,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 
 # ── Step 3: Expose port ──
-# Documents that the container listens on port 8000.
-# The actual port mapping (host:container) is set in docker-compose.yml.
-EXPOSE 8000
+# Cloud Run injects $PORT (default 8080) and expects the container to listen on it.
+# Locally (docker-compose) PORT is not set, so we default to 8000.
+EXPOSE 8080
 
 # ── Step 4: Start command ──
-# --host 0.0.0.0  → listen on all interfaces (not just localhost inside container)
-# --port 8000     → explicit port
-# No --reload in production — reload watches for file changes, not needed in container
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form (not JSON array) so $PORT is expanded at runtime.
+# Cloud Run sets PORT=8080; locally we fall back to 8000.
+CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}

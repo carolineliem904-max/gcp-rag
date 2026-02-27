@@ -18,11 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ── Step 2: Copy frontend source code ──
 COPY frontend/ ./frontend/
 
-# ── Step 3: Expose Streamlit's default port ──
-EXPOSE 8501
+# ── Step 3: Expose port ──
+# Cloud Run injects $PORT (default 8080). Streamlit must listen on it.
+EXPOSE 8080
 
 # ── Step 4: Start Streamlit ──
-# --server.address=0.0.0.0  → accept connections from outside the container
-# --server.port=8501         → explicit port
-# --server.headless=true     → don't try to open a browser (no browser in container)
-CMD ["streamlit", "run", "frontend/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+# Shell form so $PORT is expanded at runtime.
+# Cloud Run sets PORT=8080; locally we fall back to 8501.
+CMD streamlit run frontend/app.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true
