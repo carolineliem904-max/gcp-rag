@@ -19,6 +19,11 @@ How it works:
 
   This is called "nearest neighbor search" or "similarity search".
 
+Session isolation:
+  Each upload is tagged with a session_id in metadata.
+  Search and delete operations filter by session_id so users only
+  see results from their own uploaded documents.
+
 Persistence:
   ChromaDB saves data to disk (./chroma_db/ by default).
   The data survives between script runs — you embed once, search many times.
@@ -59,32 +64,37 @@ def add_documents(
     chunks: list[str],
     embeddings: list[list[float]],
     source_filename: str,
+    session_id: str,
 ) -> None:
     """
-    Add text chunks and their embeddings to ChromaDB.
+    Add text chunks and their embeddings to ChromaDB, tagged by session.
 
     Each chunk gets:
-      - A unique ID (source filename + chunk index)
+      - A unique ID (session_id + source filename + chunk index)
       - The embedding vector (768 floats)
       - The original text (stored so we can return it later)
-      - Metadata (source file name, chunk index)
+      - Metadata: source filename, chunk index, session_id
+
+    The session_id prefix in the ID ensures two sessions uploading
+    the same filename don't overwrite each other.
 
     Args:
         chunks:          list of text strings (the actual content)
         embeddings:      list of vectors, one per chunk
         source_filename: name of the original document (for tracking)
+        session_id:      the session that uploaded this document
     """
     collection = get_collection()
 
-    # Build IDs, embeddings, documents, and metadata lists
-    ids = [f"{source_filename}_chunk_{i}" for i in range(len(chunks))]
+    # Composite ID: session_id prefix prevents cross-session collisions
+    ids = [f"{session_id}__{source_filename}_chunk_{i}" for i in range(len(chunks))]
     metadatas = [
-        {"source": source_filename, "chunk_index": i}
+        {"source": source_filename, "chunk_index": i, "session_id": session_id}
         for i in range(len(chunks))
     ]
 
     # ChromaDB upsert: insert if new, update if ID already exists
-    # This means re-uploading the same file won't create duplicates
+    # This means re-uploading the same file in the same session won't duplicate
     collection.upsert(
         ids=ids,
         embeddings=embeddings,
@@ -92,15 +102,19 @@ def add_documents(
         metadatas=metadatas,
     )
 
-    print(f"  Stored {len(chunks)} chunks from '{source_filename}' in ChromaDB")
+    print(f"  Stored {len(chunks)} chunks from '{source_filename}' (session: {session_id})")
 
 
-def search(query_embedding: list[float], n_results: int = 3) -> list[dict]:
+def search(query_embedding: list[float], session_id: str, n_results: int = 3) -> list[dict]:
     """
-    Find the most relevant chunks for a given query embedding.
+    Find the most relevant chunks for a given query, scoped to a session.
+
+    Uses ChromaDB's 'where' filter so only documents uploaded by this
+    session are considered — different sessions are completely isolated.
 
     Args:
         query_embedding: the vector for the user's question
+        session_id:      only search documents from this session
         n_results:       how many chunks to return (top-k)
 
     Returns:
@@ -109,17 +123,26 @@ def search(query_embedding: list[float], n_results: int = 3) -> list[dict]:
           - 'source':   which document it came from
           - 'distance': similarity score (lower = more similar in cosine space)
 
-    Example:
-        query_vec = get_single_embedding("What is machine learning?")
-        results = search(query_vec, n_results=3)
-        for r in results:
-            print(r['text'])
+    Returns [] if no documents are uploaded for this session yet.
     """
     collection = get_collection()
 
+    # Check if this session has any documents at all — ChromaDB raises an
+    # error if you query with n_results > number of matching items = 0.
+    session_docs = collection.get(
+        where={"session_id": session_id},
+        include=[],
+    )
+    if not session_docs["ids"]:
+        return []
+
+    # Cap n_results to how many chunks actually exist for this session
+    actual_n = min(n_results, len(session_docs["ids"]))
+
     results = collection.query(
-        query_embeddings=[query_embedding],  # wrap in list — ChromaDB expects batch
-        n_results=n_results,
+        query_embeddings=[query_embedding],
+        n_results=actual_n,
+        where={"session_id": session_id},  # only this session's documents
         include=["documents", "metadatas", "distances"],
     )
 
@@ -133,6 +156,63 @@ def search(query_embedding: list[float], n_results: int = 3) -> list[dict]:
         })
 
     return output
+
+
+def list_documents(session_id: str) -> list[str]:
+    """
+    Return a list of unique document filenames uploaded by a session.
+
+    Args:
+        session_id: the session to list documents for
+
+    Returns:
+        Sorted list of unique source filenames, e.g. ["guide.pdf", "notes.txt"]
+    """
+    collection = get_collection()
+
+    results = collection.get(
+        where={"session_id": session_id},
+        include=["metadatas"],
+    )
+
+    # Extract unique filenames from metadata
+    seen = set()
+    for meta in results["metadatas"]:
+        seen.add(meta.get("source", "unknown"))
+
+    return sorted(seen)
+
+
+def delete_document(session_id: str, source_filename: str) -> int:
+    """
+    Delete all chunks for a specific document within a session.
+
+    Args:
+        session_id:      the session that owns the document
+        source_filename: the document filename to delete
+
+    Returns:
+        Number of chunks deleted
+    """
+    collection = get_collection()
+
+    # Find all chunk IDs for this session + filename
+    results = collection.get(
+        where={
+            "$and": [
+                {"session_id": {"$eq": session_id}},
+                {"source": {"$eq": source_filename}},
+            ]
+        },
+        include=[],
+    )
+
+    ids_to_delete = results["ids"]
+    if ids_to_delete:
+        collection.delete(ids=ids_to_delete)
+        print(f"  Deleted {len(ids_to_delete)} chunks for '{source_filename}' (session: {session_id})")
+
+    return len(ids_to_delete)
 
 
 def get_collection_stats() -> dict:

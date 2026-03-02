@@ -28,7 +28,7 @@ CORS (Cross-Origin Resource Sharing):
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import upload, chat, history
+from backend.routers import upload, chat, history, documents
 
 # --- Create the FastAPI app ---
 app = FastAPI(
@@ -49,9 +49,10 @@ app.add_middleware(
 
 # --- Register routers ---
 # Each router brings its own endpoints into the app.
-app.include_router(upload.router, tags=["Documents"])
-app.include_router(chat.router,   tags=["Chat"])
-app.include_router(history.router, tags=["History"])
+app.include_router(upload.router,    tags=["Documents"])
+app.include_router(documents.router, tags=["Documents"])
+app.include_router(chat.router,      tags=["Chat"])
+app.include_router(history.router,   tags=["History"])
 
 
 # --- Health check endpoint ---

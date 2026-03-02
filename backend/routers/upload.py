@@ -4,13 +4,13 @@ Upload Router — POST /upload
 Handles document upload and processing.
 
 Flow when a user uploads a file:
-  1. FastAPI receives the file via multipart form upload
+  1. FastAPI receives the file + session_id via multipart form upload
   2. We save it to a temp location on disk
-  3. Upload original file to Cloud Storage (permanent storage)
+  3. Upload original file to Cloud Storage under documents/{session_id}/{filename}
   4. Extract text from the file
   5. Split text into chunks
   6. Generate embeddings for each chunk (Vertex AI call)
-  7. Store chunks + embeddings in ChromaDB
+  7. Store chunks + embeddings in ChromaDB, tagged with session_id
   8. Delete the temp file
   9. Return a success response
 
@@ -18,11 +18,15 @@ Why Cloud Storage AND ChromaDB?
   - Cloud Storage = stores the original file (PDF/TXT) permanently
   - ChromaDB = stores the processed vectors for fast similarity search
   These serve different purposes and are both needed.
+
+Why session_id?
+  Each session gets its own document namespace. Documents uploaded by
+  session A are never visible to session B's searches.
 """
 
 import os
 import tempfile
-from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException
 from pydantic import BaseModel
 
 from backend.services.storage import upload_file
@@ -44,11 +48,14 @@ class UploadResponse(BaseModel):
 
 
 @router.post("/upload", response_model=UploadResponse)
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+):
     """
     Upload a PDF or TXT file, process it, and store in the vector database.
 
-    - Accepts: multipart/form-data with a 'file' field
+    - Accepts: multipart/form-data with 'file' and 'session_id' fields
     - Returns: upload confirmation with chunk count
 
     You can test this in Swagger UI at http://localhost:8000/docs
@@ -63,6 +70,9 @@ async def upload_document(file: UploadFile = File(...)):
             detail=f"Unsupported file type '{ext}'. Please upload a .pdf or .txt file."
         )
 
+    if not session_id.strip():
+        raise HTTPException(status_code=400, detail="session_id cannot be empty.")
+
     # --- Save to a temporary file ---
     # UploadFile is a stream — we must save it to disk before processing.
     # tempfile.NamedTemporaryFile creates a file in /tmp that auto-deletes.
@@ -73,9 +83,11 @@ async def upload_document(file: UploadFile = File(...)):
 
     try:
         # --- Upload original to Cloud Storage ---
+        # Store under documents/{session_id}/ so each session's files are separate
+        gcs_blob_name = f"documents/{session_id}/{filename}"
         upload_file(
             local_file_path=tmp_path,
-            destination_blob_name=f"documents/{filename}",
+            destination_blob_name=gcs_blob_name,
         )
 
         # --- Extract text ---
@@ -92,8 +104,8 @@ async def upload_document(file: UploadFile = File(...)):
         # --- Generate embeddings ---
         embeddings = get_embeddings(chunks)
 
-        # --- Store in ChromaDB ---
-        add_documents(chunks, embeddings, source_filename=filename)
+        # --- Store in ChromaDB with session_id ---
+        add_documents(chunks, embeddings, source_filename=filename, session_id=session_id)
 
         # --- Get total DB stats ---
         stats = get_collection_stats()

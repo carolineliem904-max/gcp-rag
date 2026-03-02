@@ -240,12 +240,24 @@ def check_backend_health() -> bool:
         return False
 
 
-def upload_document(file) -> dict:
-    """Send a file to POST /upload and return the response."""
+def upload_document(file, session_id: str) -> dict:
+    """Send a file and session_id to POST /upload and return the response."""
     response = requests.post(
         f"{BACKEND_URL}/upload",
         files={"file": (file.name, file.getvalue(), file.type)},
+        data={"session_id": session_id},
         timeout=120,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def delete_document(filename: str, session_id: str) -> dict:
+    """Call DELETE /documents/{filename}?session_id=xxx and return the response."""
+    response = requests.delete(
+        f"{BACKEND_URL}/documents/{filename}",
+        params={"session_id": session_id},
+        timeout=30,
     )
     response.raise_for_status()
     return response.json()
@@ -328,7 +340,7 @@ with st.sidebar:
         if st.button("⚡ Process Document", use_container_width=True, type="primary"):
             with st.spinner(f"Processing '{uploaded_file.name}'..."):
                 try:
-                    result = upload_document(uploaded_file)
+                    result = upload_document(uploaded_file, st.session_state.session_id)
                     st.success(f"✓ {result['chunks_stored']} chunks stored")
                     if uploaded_file.name not in st.session_state.uploaded_docs:
                         st.session_state.uploaded_docs.append(uploaded_file.name)
@@ -337,11 +349,24 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"Upload failed: {str(e)}")
 
-    # Show uploaded docs
+    # Show uploaded docs with delete buttons
     if st.session_state.uploaded_docs:
         st.markdown('<p class="sidebar-label">📚 Processed Documents</p>', unsafe_allow_html=True)
-        for doc in st.session_state.uploaded_docs:
-            st.markdown(f"✓ `{doc}`")
+        for doc in list(st.session_state.uploaded_docs):
+            col_name, col_btn = st.columns([4, 1])
+            with col_name:
+                st.markdown(f"✓ `{doc}`")
+            with col_btn:
+                if st.button("✕", key=f"del_{doc}", help=f"Delete {doc}"):
+                    with st.spinner(f"Deleting '{doc}'..."):
+                        try:
+                            delete_document(doc, st.session_state.session_id)
+                            st.session_state.uploaded_docs.remove(doc)
+                            st.rerun()
+                        except requests.exceptions.ConnectionError:
+                            st.error("Cannot reach backend.")
+                        except Exception as e:
+                            st.error(f"Delete failed: {str(e)}")
 
     st.markdown("---")
 
@@ -366,6 +391,7 @@ with st.sidebar:
             new_id = f"session-{uuid.uuid4().hex[:8]}"
             st.session_state.session_id = new_id
             st.session_state.messages = []
+            st.session_state.uploaded_docs = []  # new session starts with no docs
             # Update URL so the new session persists on refresh too
             st.query_params["session_id"] = new_id
             st.rerun()

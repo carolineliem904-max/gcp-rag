@@ -106,3 +106,22 @@ def list_files(prefix: str = "documents/") -> list[str]:
 
     blobs = bucket.list_blobs(prefix=prefix)
     return [blob.name for blob in blobs]
+
+
+def delete_file(blob_name: str) -> None:
+    """
+    Delete a file from Cloud Storage.
+
+    Args:
+        blob_name: path to the file inside the bucket,
+                   e.g. "documents/session-abc123/sample.pdf"
+
+    Raises:
+        google.cloud.exceptions.NotFound if the file doesn't exist.
+    """
+    client = get_storage_client()
+    bucket = client.bucket(BUCKET_NAME)
+    blob = bucket.blob(blob_name)
+
+    blob.delete()
+    print(f"  Deleted: gs://{BUCKET_NAME}/{blob_name}")

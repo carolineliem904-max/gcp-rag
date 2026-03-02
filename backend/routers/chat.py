@@ -82,8 +82,8 @@ async def chat(request: ChatRequest):
     )
 
     # --- Run RAG pipeline ---
-    # This embeds the question, retrieves chunks, and calls Gemini
-    result = ask(question=request.message)
+    # This embeds the question, retrieves only this session's chunks, and calls Gemini
+    result = ask(question=request.message, session_id=request.session_id)
 
     # --- Save assistant answer to Firestore ---
     save_message(
@@ -134,7 +134,7 @@ async def chat_stream(request: ChatRequest):
     full_answer_parts = []
 
     def generate():
-        for token in stream_ask(request.message):
+        for token in stream_ask(request.message, session_id=request.session_id):
             if token.startswith("__SOURCES__"):
                 # This is the final sources marker — save the full answer now
                 full_answer = "".join(full_answer_parts)

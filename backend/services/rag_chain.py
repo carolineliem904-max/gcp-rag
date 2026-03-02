@@ -89,15 +89,16 @@ ANSWER:"""
     return prompt
 
 
-def ask(question: str, n_results: int = TOP_K) -> dict:
+def ask(question: str, session_id: str, n_results: int = TOP_K) -> dict:
     """
     The main RAG function — takes a question, returns a grounded answer.
 
     This is what the FastAPI /chat endpoint will call in Phase 4.
 
     Args:
-        question:  the user's question as a plain string
-        n_results: how many document chunks to retrieve (default 3)
+        question:   the user's question as a plain string
+        session_id: only retrieve documents uploaded by this session
+        n_results:  how many document chunks to retrieve (default 3)
 
     Returns:
         A dict with:
@@ -106,7 +107,7 @@ def ask(question: str, n_results: int = TOP_K) -> dict:
           - 'question': the original question (for logging)
 
     Example:
-        result = ask("What is supervised learning?")
+        result = ask("What is supervised learning?", session_id="session-abc123")
         print(result['answer'])
         print(result['sources'])
     """
@@ -117,10 +118,10 @@ def ask(question: str, n_results: int = TOP_K) -> dict:
     query_vector = get_single_embedding(question)
 
     # --- Step 2: Retrieve relevant chunks from ChromaDB ---
-    # Find the top-k chunks whose vectors are closest to the question vector.
-    # "Closest" = most semantically similar = most likely to contain the answer.
-    print(f"  [RAG] Searching ChromaDB for top {n_results} relevant chunks...")
-    retrieved_chunks = search(query_vector, n_results=n_results)
+    # Find the top-k chunks whose vectors are closest to the question vector,
+    # filtered to only this session's uploaded documents.
+    print(f"  [RAG] Searching ChromaDB for top {n_results} relevant chunks (session: {session_id})...")
+    retrieved_chunks = search(query_vector, session_id=session_id, n_results=n_results)
 
     if not retrieved_chunks:
         return {
@@ -161,7 +162,7 @@ def ask(question: str, n_results: int = TOP_K) -> dict:
     }
 
 
-def stream_ask(question: str, n_results: int = TOP_K):
+def stream_ask(question: str, session_id: str, n_results: int = TOP_K):
     """
     Streaming version of ask() — a generator that yields text tokens one by one
     as Gemini produces them, instead of waiting for the full response.
@@ -180,15 +181,16 @@ def stream_ask(question: str, n_results: int = TOP_K):
       parses the final __SOURCES__ chunk to show which document parts were used.
 
     Args:
-        question:  the user's question
-        n_results: number of document chunks to retrieve (default 3)
+        question:   the user's question
+        session_id: only retrieve documents uploaded by this session
+        n_results:  number of document chunks to retrieve (default 3)
 
     Yields:
         str: text tokens from Gemini, then a final __SOURCES__ JSON chunk
     """
     # --- Step 1 & 2: Embed + retrieve (fast, not streamed) ---
     query_vector = get_single_embedding(question)
-    retrieved_chunks = search(query_vector, n_results=n_results)
+    retrieved_chunks = search(query_vector, session_id=session_id, n_results=n_results)
 
     if not retrieved_chunks:
         yield "No documents have been uploaded yet. Please upload a document first."
