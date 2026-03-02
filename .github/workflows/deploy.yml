@@ -1,0 +1,118 @@
+# ── CI/CD Pipeline ────────────────────────────────────────────────────────────
+#
+# Triggers on every push to main branch.
+#
+# What it does:
+#   1. Authenticates to GCP using Workload Identity Federation (no key files)
+#   2. Builds backend + frontend Docker images
+#   3. Pushes images to Artifact Registry
+#   4. Deploys backend to Cloud Run
+#   5. Deploys frontend to Cloud Run (with backend URL injected)
+#
+# Why Workload Identity Federation instead of a service account key?
+#   Keys are long-lived credentials that can leak. WIF uses short-lived OIDC
+#   tokens — GitHub proves its identity to GCP directly, no secret file needed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # Only deploy when code is merged/pushed to main
+
+# Required for Workload Identity Federation to work
+permissions:
+  contents: read
+  id-token: write  # Allows GitHub to mint an OIDC token for GCP auth
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  REGISTRY: us-central1-docker.pkg.dev
+  REPO: rag-chatbot
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest  # GitHub-hosted Linux runner (already linux/amd64 — no cross-compile needed)
+
+    steps:
+      # ── Step 1: Check out your code ──────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── Step 2: Authenticate to GCP via Workload Identity Federation ─────────
+      # No key file needed — GitHub mints a short-lived OIDC token that GCP trusts
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      # ── Step 3: Configure Docker to push to Artifact Registry ────────────────
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      # ── Step 4: Build and push backend image ─────────────────────────────────
+      - name: Build backend image
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/backend:latest \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/backend:${{ github.sha }} \
+            -f backend/Dockerfile .
+
+      - name: Push backend image
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/backend:latest
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/backend:${{ github.sha }}
+
+      # ── Step 5: Build and push frontend image ────────────────────────────────
+      - name: Build frontend image
+        run: |
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/frontend:latest \
+            -t ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/frontend:${{ github.sha }} \
+            -f frontend/Dockerfile .
+
+      - name: Push frontend image
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/frontend:latest
+          docker push ${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/frontend:${{ github.sha }}
+
+      # ── Step 6: Deploy backend to Cloud Run ──────────────────────────────────
+      - name: Deploy backend
+        run: |
+          gcloud run deploy rag-backend \
+            --image=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/backend:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --service-account=rag-chatbot-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
+            --set-env-vars="GCP_PROJECT_ID=${{ env.PROJECT_ID }},GCP_LOCATION=${{ env.REGION }},EMBEDDING_MODEL=text-embedding-004,LLM_MODEL=gemini-2.0-flash,GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME }},CHROMA_PERSIST_DIR=/tmp/chroma_db,FIRESTORE_COLLECTION=chat_history" \
+            --memory=1Gi \
+            --min-instances=0 \
+            --max-instances=2 \
+            --project=${{ env.PROJECT_ID }}
+
+      # ── Step 7: Deploy frontend to Cloud Run ─────────────────────────────────
+      - name: Deploy frontend
+        run: |
+          gcloud run deploy rag-frontend \
+            --image=${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/${{ env.REPO }}/frontend:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --set-env-vars="BACKEND_URL=${{ secrets.BACKEND_URL }}" \
+            --memory=512Mi \
+            --min-instances=0 \
+            --max-instances=2 \
+            --project=${{ env.PROJECT_ID }}
+
+      # ── Step 8: Print the live URLs ──────────────────────────────────────────
+      - name: Print service URLs
+        run: |
+          echo "Backend:"
+          gcloud run services describe rag-backend --region=${{ env.REGION }} --format="value(status.url)" --project=${{ env.PROJECT_ID }}
+          echo "Frontend:"
+          gcloud run services describe rag-frontend --region=${{ env.REGION }} --format="value(status.url)" --project=${{ env.PROJECT_ID }}
