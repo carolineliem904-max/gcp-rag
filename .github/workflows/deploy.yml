@@ -103,6 +103,7 @@ jobs:
             --region=${{ env.REGION }} \
             --platform=managed \
             --allow-unauthenticated \
+            --service-account=rag-chatbot-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
             --set-env-vars="BACKEND_URL=${{ secrets.BACKEND_URL }}" \
             --memory=512Mi \
             --min-instances=0 \
